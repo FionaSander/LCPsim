@@ -1,0 +1,96 @@
+#-----------------
+# LAMMPS
+# Simulation of Liquid Crystal Polymers
+#-----------------
+
+units lj #define units
+atom_style hybrid angle ellipsoid #ellipsoid 
+
+dimension 3 
+boundary p p p 
+
+read_data input_config.txt 
+
+group beads type 1 
+group new type 2 3
+
+#define the shape. In my case spherical beads, ellipsoids and point particles
+set type 1 shape 0.5 0.5 0.5 
+set type 2 shape 1 3 1 
+set type 3 shape 0 0 0 
+
+compute kre beads erotate/asphere 
+compute krefix new erotate/rigid 1
+compute kte all ke
+compute pec all pe
+compute q all property/atom quati quatj quatk quatw
+compute shape all property/atom shapex shapey shapez
+
+velocity all create 1 367498 loop geom
+
+pair_style hybrid gayberne 1.0 2.0 1.0 5.0 gayberne_rep 1.0 2.0 1.0 5.0 
+
+pair_coeff 1 1 gayberne 1 0.575 0.5 0.5 0.5 0.5 0.5 0.5 0.561 
+pair_coeff 1 2 gayberne_rep 1 0.575 0.5 0.5 0.5 5 1 5  
+pair_coeff 2 2 gayberne 1 1.15 5 1 5 5 1 5  
+pair_coeff 2 3 gayberne 1 1.15 5 1 5 1 1 1 0.0 
+pair_coeff 3 3 gayberne 1 0.0 1 1 1 1 1 1 0.0 
+
+#define harmonic angle and bond potentials
+angle_style harmonic
+angle_coeff 1 0.00000001 180 
+
+bond_style harmonic
+bond_coeff 1  753 0.64 
+
+neighbor 5 bin
+neigh_modify every 1 delay 0 check yes page 100000 one 10000 
+
+neigh_modify exclude type 2 3
+neigh_modify exclude type 3 3 
+
+thermo_style custom step pe ke etotal press vol temp
+
+variable step equal step
+variable pe equal pe
+variable ke equal ke
+variable Total_energy equal etotal
+variable Pressure equal press
+variable Volume equal vol
+variable Temperature equal temp
+
+#----------------
+# nvt
+#----------------
+
+fix 1 new rigid/nvt/small molecule temp 4.5 4.5 0.1 
+fix 2 beads nvt temp 4.5 4.5 0.01 
+
+fix 3 all print 8000 "${step} ${pe} ${ke} ${Total_energy} ${Pressure} ${Volume} ${Temperature}" file results screen yes
+
+write_data 271022_chiral_20beads_ssDNA_diffdamp.conf nocoeff nofix
+
+timestep 0.00005 
+
+dump 1 all custom 100000 271022_chiral_20beads_ssDNA_OPCALC4_diffdamp.dump id type x y z c_q[1] c_q[2] c_q[3] c_q[4] c_shape[1] c_shape[2] c_shape[3]
+
+restart 1000000 restart_271022_chiral_20beads_ssDNA_diffdamp.*
+run 2000000 
+
+unfix 1
+unfix 2
+
+fix 1 new rigid/npt/small molecule temp 4.5 4.5 0.1 iso 0.01 0.3 0.1 
+fix 2 beads nvt temp 4.5 4.5 0.01 
+restart 1000000 restart_271022_chiral_20beads_ssDNA_press_diffdamp.*
+run 1000000 
+
+unfix 1
+unfix 2
+
+fix 1 new rigid/npt/small molecule temp 4.5 0.03 0.1 iso 0.3 0.3 0.1 
+fix 2 beads nvt temp 4.5 0.03 0.01 
+
+restart 4000000 restart_271022_chiral_20beads_ssDNA_temppress_diffdamp.*
+run 25000000 
+
